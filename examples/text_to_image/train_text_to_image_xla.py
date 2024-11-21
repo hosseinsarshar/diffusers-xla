@@ -422,13 +422,16 @@ def main(args):
         subfolder="tokenizer",
         revision=args.revision,
     )
-
+    print("Step 0")
     from torch_xla.distributed.fsdp.utils import apply_xla_patch_to_nn_linear
     unet = apply_xla_patch_to_nn_linear(unet, xs.xla_patched_nn_linear_forward)
 
+    print("Step 1")
     vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
     unet.train()
+
+    print("Step 2")
 
     # For mixed precision training we cast all non-trainable weights (vae,
     # non-lora text_encoder and non-lora unet) to half-precision
@@ -438,8 +441,9 @@ def main(args):
     if args.mixed_precision == "bf16":
         weight_dtype = torch.bfloat16
 
+    print("Step 3")
     device = xm.xla_device()
-
+    print("Step 4")
     # Move text_encode and vae to gpu and cast to weight_dtype
     text_encoder = text_encoder.to(device, dtype=weight_dtype)
     vae = vae.to(device, dtype=weight_dtype)
@@ -447,11 +451,14 @@ def main(args):
     optimizer = setup_optimizer(unet, args)
     vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
+    print("Step 5")
     unet.train()
-
+    print("Step 6")
     dataset = load_dataset(args)
+    print("Step 7")
     image_column, caption_column = get_column_names(dataset, args)
-
+    print("Step 8")
+    
     def tokenize_captions(examples, is_train=True):
         captions = []
         for caption in examples[caption_column]:
