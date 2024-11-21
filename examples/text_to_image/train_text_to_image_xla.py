@@ -66,13 +66,17 @@ class TrainSD():
         self.optimizer.step()
 
     def start_training(self):
+        print("Step 17.0")
         dataloader_exception = False
         measure_start_step = 10
         assert measure_start_step < self.args.max_train_steps
         total_time = 0
+        print("Step 17.1")
         for step in range(0, self.args.max_train_steps):
+            print("Step 17.2 - ", step)
             try:
                 batch = next(self.dataloader)
+                print("Step 17.3 - ", step)
             except Exception as e:
                 dataloader_exception = True
                 print(e)
@@ -80,12 +84,17 @@ class TrainSD():
             if step ==  measure_start_step and PROFILE_DIR is not None:
                 xm.wait_device_ops()
                 xp.trace_detached('localhost:9012', PROFILE_DIR, duration_ms=args.profile_duration)
-                last_time = time.time()     
+                last_time = time.time()    
+            print("Step 17.4 - ", step)
             loss = self.step_fn(batch["pixel_values"], batch["input_ids"])
             self.global_step += 1
+            print("Step 17.6 - ", step)
+        print("Step 17.6")
         xm.mark_step()
+        print("Step 17.7")
         if not dataloader_exception:
             xm.wait_device_ops()
+            print("Step 17 end: xm.wait_device_ops")
             total_time = time.time() - last_time
             print(f"Average step time: {total_time/(self.args.max_train_steps-measure_start_step)}")
         else:
@@ -97,6 +106,7 @@ class TrainSD():
         pixel_values,
         input_ids,
         ):
+        print("step_fn started")
         with xp.Trace("model.forward"):
             self.optimizer.zero_grad()
             latents = self.vae.encode(pixel_values).latent_dist.sample()
@@ -479,7 +489,7 @@ def main(args):
             return_tensors="pt",
         )
         return inputs.input_ids
-
+    print("Step 9")
     train_transforms = transforms.Compose(
         [
             transforms.Resize(
@@ -505,11 +515,11 @@ def main(args):
         examples["pixel_values"] = [train_transforms(image) for image in images]
         examples["input_ids"] = tokenize_captions(examples)
         return examples
-
+    print("Step 10")
     train_dataset = dataset["train"]
     train_dataset.set_format('torch')
     train_dataset.set_transform(preprocess_train)
-
+    print("Step 11")
     def collate_fn(examples):
         pixel_values = torch.stack([example["pixel_values"] for example in examples])
         pixel_values = pixel_values.to(memory_format=torch.contiguous_format).to(
@@ -517,12 +527,13 @@ def main(args):
         )
         input_ids = torch.stack([example["input_ids"] for example in examples])
         return {"pixel_values": pixel_values, "input_ids": input_ids}
-
+    print("Step 12")
     g = torch.Generator()
     g.manual_seed(xr.host_index())
     sampler = torch.utils.data.RandomSampler(
         train_dataset, replacement=True, num_samples=int(1e10), generator=g
     )
+    print("Step 13")
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
         sampler=sampler,
@@ -531,7 +542,7 @@ def main(args):
         batch_size=args.train_batch_size,
         prefetch_factor=args.loader_prefetch_factor,
     )
-
+    print("Step 14")
     train_dataloader = pl.MpDeviceLoader(
         train_dataloader,
         device,
@@ -547,6 +558,7 @@ def main(args):
 
     num_hosts = xr.process_count()
     num_devices_per_host = num_devices // num_hosts
+    print("Step 15")
     if xm.is_master_ordinal():
         print("***** Running training *****")
         print(f"Instantaneous batch size per device = {args.train_batch_size // num_devices_per_host }")
@@ -554,7 +566,7 @@ def main(args):
             f"Total train batch size (w. parallel, distributed & accumulation) = {args.train_batch_size * num_hosts}"
         )
         print(f"  Total optimization steps = {args.max_train_steps}")
-
+    print("Step 16")
     trainer = TrainSD(vae=vae,
                       weight_dtype=weight_dtype,
                       device=device,
@@ -564,12 +576,12 @@ def main(args):
                       text_encoder=text_encoder,
                       dataloader=train_dataloader,
                       args=args)
-
+    print("Step 17")
     trainer.start_training()
     unet = trainer.unet.to("cpu")
     vae = trainer.vae.to("cpu")
     text_encoder = trainer.text_encoder.to("cpu")
-
+    print("Step 18")
     pipeline = StableDiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         text_encoder=text_encoder,
@@ -578,6 +590,7 @@ def main(args):
         revision=args.revision,
         variant=args.variant,
     )
+    print("Step 19")
     pipeline.save_pretrained(args.output_dir)
 
 
