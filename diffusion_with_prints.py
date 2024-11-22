@@ -403,6 +403,7 @@ def main(args):
 
     num_devices = xr.global_runtime_device_count()
     mesh = xs.get_1d_mesh('data')
+    print(f"{mesh=}")
     xs.set_global_mesh(mesh)
 
     text_encoder = CLIPTextModel.from_pretrained(
